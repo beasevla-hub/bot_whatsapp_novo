@@ -2,6 +2,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const { sincronizarNotion, precisaSincronizar } = require('./sync');
 const dotenv = require('dotenv');
+const { emitEvent } = require('./monitorClient');
 
 dotenv.config();
 
@@ -380,7 +381,9 @@ async function gerarPDF(licitacoes, localBusca, dataInicio, dataFim, ocultarApto
 async function sendText(sock, chatId, text) {
   try {
     await sock.sendMessage(chatId, { text });
+    emitEvent({ module: 'tablebot', severity: 'info', eventType: 'response_sent', message: 'Resposta enviada pelo bot de tabelas', details: { responseType: 'text' } });
   } catch (error) {
+    emitEvent({ module: 'tablebot', severity: 'error', eventType: 'response_error', message: 'Falha ao enviar resposta do bot de tabelas', details: { error: error.message } });
     console.error('❌ Erro ao enviar texto:', error);
   }
 }
@@ -427,6 +430,7 @@ function iniciarTimer(stateKey, sock, chatId) {
 
 async function processarBuscaDetalhada(sock, chatId, stateKey, localBusca, dataInicio, dataFim) {
   console.log(`🔎 Iniciando busca detalhada para: ${localBusca}`);
+  emitEvent({ module: 'tablebot', severity: 'debug', eventType: 'queue_processing', message: 'Pedido detalhado em processamento' });
   await sendText(sock, chatId, `Buscando licitações de ${localBusca} entre ${dataInicio.toLocaleDateString('pt-BR')} e ${dataFim.toLocaleDateString('pt-BR')}...`);
 
   const licitacoes = await buscarLicitacoes(localBusca, dataInicio, dataFim);
@@ -439,6 +443,7 @@ async function processarBuscaDetalhada(sock, chatId, stateKey, localBusca, dataI
 
   try {
     const pdfPath = await gerarPDF(licitacoes, localBusca, dataInicio, dataFim, false, 'detalhado');
+    emitEvent({ module: 'tablebot', severity: 'info', eventType: 'pdf_generated', message: 'Relatório detalhado gerado', mediaLabel: 'relatorio.pdf', details: { resultCount: licitacoes.length, mode: 'detalhado' } });
     await sendPdf(sock, chatId, pdfPath, localBusca, '');
 
     estadosConversa.set(stateKey, {
@@ -453,6 +458,7 @@ async function processarBuscaDetalhada(sock, chatId, stateKey, localBusca, dataI
     iniciarTimer(stateKey, sock, chatId);
     await sendText(sock, chatId, 'Ocultar aptos? Responda: sim ou não.');
   } catch (error) {
+    emitEvent({ module: 'tablebot', severity: 'error', eventType: 'pdf_error', message: 'Falha ao gerar ou enviar relatório detalhado', details: { error: error.message } });
     console.error('❌ Erro ao gerar/enviar PDF detalhado:', error);
     await sendText(sock, chatId, 'Ocorreu um erro ao gerar o relatório. Tente novamente.');
   }
@@ -472,6 +478,7 @@ async function processarBuscaGeral(sock, chatId, stateKey, dataInicio, dataFim) 
 
   try {
     const pdfPath = await gerarPDF(licitacoes, 'geral', dataInicio, dataFim, true, 'geral');
+    emitEvent({ module: 'tablebot', severity: 'info', eventType: 'pdf_generated', message: 'Tabela geral gerada', mediaLabel: 'tabela_geral.pdf', details: { resultCount: licitacoes.length, mode: 'geral' } });
     await sendPdf(sock, chatId, pdfPath, 'geral', '');
     estadosConversa.delete(stateKey);
   } catch (error) {
@@ -500,6 +507,7 @@ async function processMessage(sock, msg) {
   const textoLower = textoLimpo.toLowerCase();
 
   console.log(`\n📩 [TableBot] Mensagem de ${participant.replace('@s.whatsapp.net', '')} em ${isGroup ? 'Grupo' : 'Privado'}: "${textoOriginal}"`);
+  emitEvent({ module: 'tablebot', severity: 'info', eventType: 'message_received', message: 'Mensagem recebida pelo bot de tabelas', senderLabel: participant.replace('@s.whatsapp.net', '').replace('@g.us', ''), details: { isGroup, command: textoLower.startsWith('tabela') ? textoLower.slice(0, 80) : 'conversation' } });
 
   // Atualiza o cache apenas quando necessário; falhas mantêm o último cache válido.
   await garantirDatabaseAtualizada();

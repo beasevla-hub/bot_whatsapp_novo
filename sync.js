@@ -3,6 +3,7 @@ const fs = require('fs');
 const dotenv = require('dotenv');
 const path = require('path');
 const { writeJsonAtomic, acquireProcessLock } = require('./runtime');
+const { emitEvent } = require('./monitorClient');
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -15,6 +16,7 @@ const notion = new Client({
 
 async function sincronizarNotion() {
     console.log('🔄 Iniciando sincronização com Notion...');
+    emitEvent({ module: 'notion', severity: 'info', eventType: 'sync_started', message: 'Sincronização do Notion iniciada' });
     let releaseLock = null;
     
     try {
@@ -82,6 +84,7 @@ async function sincronizarNotion() {
         releaseLock = null;
         
         console.log(`✅ Sincronização concluída! ${allResults.length} licitações salvas em database.json`);
+        emitEvent({ module: 'notion', severity: 'info', eventType: 'sync_completed', message: 'Sincronização do Notion concluída', details: { totalItems: allResults.length, pages: pagina - 1 } });
         console.log(`🕐 Última atualização: ${new Date().toLocaleString('pt-BR')}`);
         console.log(`📄 Processadas ${pagina - 1} páginas no total`);
         
@@ -89,6 +92,7 @@ async function sincronizarNotion() {
         
     } catch (error) {
         if (releaseLock) releaseLock();
+        emitEvent({ module: 'notion', severity: 'error', eventType: 'sync_error', message: 'Falha na sincronização do Notion', details: { error: error.message } });
         console.error('❌ Erro na sincronização:', error);
         if (error.code === 'validation_error') {
             console.error('💡 Dica: Verifique se as variáveis de ambiente NOTION_API_KEY e NOTION_DATABASE_ID estão corretas');

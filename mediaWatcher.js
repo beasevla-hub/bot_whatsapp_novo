@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { getTodayString, getDateString, getNowTimeString, formatTimestamp, isToday, isDate, ensureDir, getFoldersForDay, createDayStructure } = require('./utils');
 const { writeJsonAtomic, readJson } = require('./runtime');
+const { emitEvent } = require('./monitorClient');
 
 // Tentativa de importar makeInMemoryStore de múltiplas fontes
 let makeInMemoryStore = null;
@@ -535,6 +536,7 @@ async function downloadMedia(msg, sock) {
     return buffer;
   } catch (err) {
     console.error('   ❌ Falha no download:', err.message);
+    emitEvent({ module: 'baileys', severity: 'error', eventType: 'media_download_error', message: 'Falha ao baixar mídia', details: { error: err.message } });
     return null;
   }
 }
@@ -573,6 +575,7 @@ async function handleMedia(msg, sock, groupName, groupId, silent, ctx) {
   fs.writeFileSync(filePath, buffer);
   registerInCache(uniqueId, fileName, hash, groupName, groupId, mediaInfo.type, msgParticipant(msg), ctx);
   if (!silent) logDownload(fileName, filePath);
+  emitEvent({ module: 'baileys', severity: 'info', eventType: 'media_saved', message: 'Mídia salva com sucesso', groupLabel: groupName, senderLabel: msgParticipant(msg), mediaLabel: fileName, details: { mediaType: mediaInfo.type } });
   return 'download';
 }
 

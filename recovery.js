@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const { getTodayString, getDateString, ensureDir, getFoldersForDay, createDayStructure, isDate } = require('./utils');
 const { writeJsonAtomic, acquireProcessLock } = require('./runtime');
+const { emitEvent } = require('./monitorClient');
 
 // ============================================================
 // PARSE DE ARGUMENTOS DE LINHA DE COMANDO
@@ -36,6 +37,7 @@ const MAX_FETCH_ATTEMPTS = 10;      // Máximo de 10 tentativas
 // ESTADO
 // ============================================================
 let recoveryTimedOut = false;
+let wasDisconnected = false;
 
 // ============================================================
 // UTILITÁRIOS LOCAIS
@@ -472,6 +474,7 @@ async function runRecovery() {
   process.once('exit', releaseLock);
   console.log('');
   console.log('🔄 === MÓDULO DE RECUPERAÇÃO INICIADO ===');
+  emitEvent({ module: 'recovery', severity: 'info', eventType: 'recovery_started', message: 'Recovery iniciado' });
   if (TARGET_DATE) {
     console.log(`   📅 Data alvo: ${TARGET_DATE}`);
   } else {
@@ -558,6 +561,8 @@ async function runRecovery() {
     if (recoveryTimedOut) return;
     console.log('');
     console.log('✅ WhatsApp Web conectado!');
+    if (wasDisconnected) emitEvent({ module: 'recovery', severity: 'info', eventType: 'recovery_reconnected', message: 'Cliente de recovery reconectado' });
+    wasDisconnected = false;
     console.log('');
     console.log('====================================');
     console.log('MODO RECOVERY ATIVO');
@@ -573,11 +578,13 @@ async function runRecovery() {
 
       for (const [groupId, obra] of obrasAtivas) {
         if (recoveryTimedOut) break;
+        emitEvent({ module: 'recovery', severity: 'debug', eventType: 'recovery_progress', message: 'Processando obra no recovery' });
         const res = await runRecoveryForObra(client, obra, groupId);
         grandTotalMedia += res.totalMedia;
         grandTotalSkipped += res.totalSkipped;
         grandTotalDownloaded += res.totalDownloaded;
         grandTotalText += res.totalText;
+        emitEvent({ module: 'recovery', severity: 'debug', eventType: 'recovery_progress', message: 'Obra processada no recovery', details: { downloaded: res.totalDownloaded, skipped: res.totalSkipped } });
       }
 
       console.log('');
@@ -589,10 +596,12 @@ async function runRecovery() {
       console.log('   ==================================');
 
       updateSharedState({ recovery_status: 'completed', recovery_last_run: new Date().toISOString() });
+      emitEvent({ module: 'recovery', severity: 'info', eventType: 'recovery_completed', message: 'Recovery concluído' });
       console.log('   ✅ Recovery concluído.');
 
     } catch (e) {
       console.error('');
+      emitEvent({ module: 'recovery', severity: 'error', eventType: 'recovery_error', message: 'Falha no recovery', details: { error: e.message } });
       console.error('❌ Erro:', e.message);
       console.error(e.stack);
       updateSharedState({ recovery_status: 'failed', recovery_trigger_reason: e.message });
@@ -605,6 +614,8 @@ async function runRecovery() {
   });
 
   client.on('disconnected', (reason) => {
+    wasDisconnected = true;
+    emitEvent({ module: 'recovery', severity: 'warn', eventType: 'recovery_disconnected', message: 'Cliente de recovery desconectado', details: { reason: String(reason) } });
     console.log(`   ⚠️  Desconectado: ${reason}`);
   });
 

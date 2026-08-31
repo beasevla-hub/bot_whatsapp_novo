@@ -2,6 +2,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLat
 const pino = require('pino');
 const mediaWatcher = require('./mediaWatcher');
 const router = require('./router');
+const { emitEvent } = require('./monitorClient');
 
 const APPEND_IDLE_DELAY = 3000; // 3 segundos sem mensagens append = sync terminado
 let syncCompleted = false;
@@ -79,6 +80,7 @@ async function start() {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       console.log(`❌ Conexão caiu (Código: ${statusCode}). Reconectando automaticamente: ${shouldReconnect}`);
+      emitEvent({ module: 'baileys', severity: 'warn', eventType: 'connection_closed', message: 'Conexão Baileys encerrada; reconexão avaliada', details: { statusCode, shouldReconnect } });
       if (shouldReconnect && !reconnectTimer) {
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;
@@ -90,6 +92,7 @@ async function start() {
     } else if (connection === 'open') {
       syncCompleted = false;
       console.log('✅ Conexão estabelecida e blindada contra quedas!');
+      emitEvent({ module: 'baileys', severity: 'info', eventType: 'connection_open', message: 'Conexão Baileys estabelecida' });
       console.log('   Aguardando sync inicial...');
 
       const needsRecovery = mediaWatcher.checkIfRecoveryNeeded();
@@ -159,9 +162,16 @@ async function start() {
     }
 
     for (const msg of messages) {
+      emitEvent({ module: 'baileys', severity: 'debug', eventType: 'queue_enqueued', message: 'Mensagem adicionada à fila de processamento', details: { batchType: type } });
       messageQueue = messageQueue
-        .then(() => router.route(sock, msg))
-        .catch(error => console.error('❌ Erro no processamento da mensagem:', error));
+        .then(() => {
+          emitEvent({ module: 'baileys', severity: 'debug', eventType: 'queue_processing', message: 'Mensagem em processamento' });
+          return router.route(sock, msg);
+        })
+        .catch(error => {
+          emitEvent({ module: 'system', severity: 'error', eventType: 'message_processing_error', message: 'Falha no processamento de mensagem', details: { error: error.message } });
+          console.error('❌ Erro no processamento da mensagem:', error);
+        });
     }
     await messageQueue;
   });

@@ -62,4 +62,6 @@ function startDashboard() {
   return server;
 }
 
+if (require.main === module) startDashboard();
+
 module.exports = { startDashboard };

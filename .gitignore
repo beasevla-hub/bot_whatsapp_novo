@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# WhatsApp authentication / sessions
+web_auth/
+auth_info/
+.wwebjs_auth/
+.wwebjs_cache/
+.baileys/
+*.session
+
+# Cache
+.webjs_cache/
+.cache/
+tmp/
+temp/
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Generated files
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+
+# Local files
+*.local

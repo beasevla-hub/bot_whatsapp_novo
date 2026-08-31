@@ -1,8 +1,20 @@
 {
+  "name": "bot-whatsapp-obras",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot WhatsApp para arquivamento de mídias e geração de tabelas",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "recovery": "node recovery.js",
+    "sync": "node sync.js",
+    "check": "node --check index.js && node --check mediaWatcher.js && node --check recovery.js && node --check tableBot.js && node --check router.js && node --check sync.js"
+  },
   "dependencies": {
     "@notionhq/client": "^5.23.3",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "dotenv": "^17.4.2",
+    "pino": "^9.7.0",
     "whatsapp-web.js": "github:lindionez/whatsapp-web.js#feat/fix-_serialized-id-fallback"
   }
 }

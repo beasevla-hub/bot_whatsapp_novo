@@ -9,6 +9,19 @@ const DATABASE_PATH = './database.json';
 const ORGAOS_DB_PATH = './database_orgaos.json';
 
 const estadosConversa = new Map();
+let sincronizacaoEmAndamento = null;
+
+async function garantirDatabaseAtualizada() {
+  if (!precisaSincronizar()) return;
+  if (!sincronizacaoEmAndamento) {
+    sincronizacaoEmAndamento = sincronizarNotion()
+      .catch(error => {
+        console.error('⚠️ Não foi possível atualizar o cache do Notion; usando a cópia local:', error.message);
+      })
+      .finally(() => { sincronizacaoEmAndamento = null; });
+  }
+  await sincronizacaoEmAndamento;
+}
 
 const ORGAOS_HARDCODED = [
   {
@@ -487,6 +500,9 @@ async function processMessage(sock, msg) {
   const textoLower = textoLimpo.toLowerCase();
 
   console.log(`\n📩 [TableBot] Mensagem de ${participant.replace('@s.whatsapp.net', '')} em ${isGroup ? 'Grupo' : 'Privado'}: "${textoOriginal}"`);
+
+  // Atualiza o cache apenas quando necessário; falhas mantêm o último cache válido.
+  await garantirDatabaseAtualizada();
 
   // MOTOR DE DETECÇÃO
   let ehNovoPedido = false;

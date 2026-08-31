@@ -6,6 +6,9 @@ const router = require('./router');
 const APPEND_IDLE_DELAY = 3000; // 3 segundos sem mensagens append = sync terminado
 let syncCompleted = false;
 let appendIdleTimer = null;
+let messageQueue = Promise.resolve();
+let persistTimer = null;
+let reconnectTimer = null;
 
 // ============================================================
 // ENTRY POINT ÚNICO
@@ -37,9 +40,9 @@ async function start() {
   const store = mediaWatcher.setupStore();
   store.bind(sock.ev);
 
-  setInterval(() => {
-    mediaWatcher.persistStore();
-  }, 10000);
+  if (!persistTimer) {
+    persistTimer = setInterval(() => mediaWatcher.persistStore(), 10000);
+  }
 
   // ── Inicializa subsistemas ──
   mediaWatcher.init();
@@ -76,8 +79,11 @@ async function start() {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       console.log(`❌ Conexão caiu (Código: ${statusCode}). Reconectando automaticamente: ${shouldReconnect}`);
-      if (shouldReconnect) {
-        setTimeout(start, 5000);
+      if (shouldReconnect && !reconnectTimer) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          start().catch(error => console.error('❌ Erro ao reconectar:', error));
+        }, 5000);
       } else {
         console.log('⚠️ Você deslogou pelo celular. Delete a pasta auth_info e rode de novo.');
       }
@@ -153,8 +159,11 @@ async function start() {
     }
 
     for (const msg of messages) {
-      await router.route(sock, msg);
+      messageQueue = messageQueue
+        .then(() => router.route(sock, msg))
+        .catch(error => console.error('❌ Erro no processamento da mensagem:', error));
     }
+    await messageQueue;
   });
 }
 

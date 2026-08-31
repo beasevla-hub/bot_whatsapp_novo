@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const { getTodayString, getDateString, ensureDir, getFoldersForDay, createDayStructure, isDate } = require('./utils');
+const { writeJsonAtomic, acquireProcessLock } = require('./runtime');
 
 // ============================================================
 // PARSE DE ARGUMENTOS DE LINHA DE COMANDO
@@ -202,7 +203,7 @@ function updateSharedState(updates) {
       state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
     }
     Object.assign(state, updates);
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    writeJsonAtomic(STATE_FILE, state);
   } catch (e) {
     console.error('   ❌ Erro ao atualizar shared_state:', e.message);
   }
@@ -260,7 +261,7 @@ async function runRecoveryForObra(client, obra, groupId) {
     console.log(`      🔄 ${synced} arquivo(s) existente(s) sincronizado(s) no cache.`);
     try {
       ensureDir(path.dirname(cacheFile));
-      fs.writeFileSync(cacheFile, JSON.stringify(mediaCache, null, 2));
+      writeJsonAtomic(cacheFile, mediaCache);
     } catch (e) {}
   }
 
@@ -449,7 +450,7 @@ async function runRecoveryForObra(client, obra, groupId) {
   // Salvar cache
   try {
     ensureDir(path.dirname(cacheFile));
-    fs.writeFileSync(cacheFile, JSON.stringify(mediaCache, null, 2));
+    writeJsonAtomic(cacheFile, mediaCache);
   } catch (err) {
     console.error('      ❌ Erro ao salvar cache:', err.message);
   }
@@ -463,6 +464,12 @@ async function runRecoveryForObra(client, obra, groupId) {
 // RECOVERY PRINCIPAL
 // ============================================================
 async function runRecovery() {
+  const releaseLock = acquireProcessLock('./.recovery.lock', RECOVERY_TIMEOUT_MS + 60000);
+  if (!releaseLock) {
+    console.log('ℹ️  Recovery já está sendo executado por outro processo.');
+    process.exit(0);
+  }
+  process.once('exit', releaseLock);
   console.log('');
   console.log('🔄 === MÓDULO DE RECUPERAÇÃO INICIADO ===');
   if (TARGET_DATE) {

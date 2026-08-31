@@ -46,3 +46,15 @@ desktop.ini
 
 # Local files
 *.local
+
+# Dados locais da operação (não versionar)
+obras.json
+database.json
+database_orgaos.json
+baileys_store.json
+shared_state.json
+.media_index.json
+.recovery.lock
+.notion-sync.lock
+licitacoes_*.json
+relatorio_*.pdf

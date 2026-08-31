@@ -1,6 +1,8 @@
 const { Client } = require('@notionhq/client');
 const fs = require('fs');
 const dotenv = require('dotenv');
+const path = require('path');
+const { writeJsonAtomic, acquireProcessLock } = require('./runtime');
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -13,9 +15,18 @@ const notion = new Client({
 
 async function sincronizarNotion() {
     console.log('🔄 Iniciando sincronização com Notion...');
+    let releaseLock = null;
     
     try {
         const databaseId = process.env.NOTION_DATABASE_ID;
+        if (!process.env.NOTION_API_KEY || !databaseId) {
+            throw new Error('NOTION_API_KEY e NOTION_DATABASE_ID são obrigatórios para sincronizar.');
+        }
+        releaseLock = acquireProcessLock(path.resolve('./.notion-sync.lock'), 30 * 60 * 1000);
+        if (!releaseLock) {
+            console.log('ℹ️ Sincronização do Notion já está em andamento.');
+            return carregarCacheLocal();
+        }
         
         // Descobrir data_source_id
         const databaseInfo = await notion.databases.retrieve({ database_id: databaseId });
@@ -66,7 +77,9 @@ async function sincronizarNotion() {
             data: allResults // Array gigante com todas as licitações
         };
         
-        fs.writeFileSync('database.json', JSON.stringify(databaseFile, null, 2));
+        writeJsonAtomic(path.resolve('./database.json'), databaseFile);
+        releaseLock();
+        releaseLock = null;
         
         console.log(`✅ Sincronização concluída! ${allResults.length} licitações salvas em database.json`);
         console.log(`🕐 Última atualização: ${new Date().toLocaleString('pt-BR')}`);
@@ -75,11 +88,20 @@ async function sincronizarNotion() {
         return allResults;
         
     } catch (error) {
+        if (releaseLock) releaseLock();
         console.error('❌ Erro na sincronização:', error);
         if (error.code === 'validation_error') {
             console.error('💡 Dica: Verifique se as variáveis de ambiente NOTION_API_KEY e NOTION_DATABASE_ID estão corretas');
         }
         throw error;
+    }
+}
+
+function carregarCacheLocal() {
+    try {
+        return JSON.parse(fs.readFileSync('./database.json', 'utf8')).data || [];
+    } catch (_) {
+        return [];
     }
 }
 

@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const { getTodayString, getDateString, getNowTimeString, formatTimestamp, isToday, isDate, ensureDir, getFoldersForDay, createDayStructure } = require('./utils');
+const { writeJsonAtomic, readJson } = require('./runtime');
 
 // Tentativa de importar makeInMemoryStore de múltiplas fontes
 let makeInMemoryStore = null;
@@ -233,7 +234,7 @@ function loadCache(ctx) {
 function saveCache(ctx) {
   try {
     ensureDir(path.dirname(ctx.cacheFile));
-    fs.writeFileSync(ctx.cacheFile, JSON.stringify(ctx.mediaCache, null, 2));
+    writeJsonAtomic(ctx.cacheFile, ctx.mediaCache);
   } catch (err) {
     console.error(`❌ Erro ao salvar cache [${ctx.remoteJid}]:`, err.message);
   }
@@ -703,12 +704,8 @@ async function processMessage(sock, msg, obraConfig) {
 // ============================================================
 function updateSharedState(updates) {
   try {
-    let state = {};
-    if (fs.existsSync(STATE_FILE)) {
-      state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-    }
-    Object.assign(state, updates);
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    const state = { ...readJson(STATE_FILE, {}), ...updates };
+    writeJsonAtomic(STATE_FILE, state);
   } catch (e) {
     console.error('❌ Erro ao atualizar shared_state:', e.message);
   }

@@ -6,9 +6,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "dashboard": "node dashboardServer.js",
+    "test": "node --test monitorClient.test.js",
     "recovery": "node recovery.js",
     "sync": "node sync.js",
-    "check": "node --check index.js && node --check mediaWatcher.js && node --check recovery.js && node --check tableBot.js && node --check router.js && node --check sync.js"
+    "check": "node --check index.js && node --check dashboardServer.js && node --check monitorClient.js && node --check mediaWatcher.js && node --check recovery.js && node --check tableBot.js && node --check router.js && node --check sync.js"
   },
   "dependencies": {
     "@notionhq/client": "^5.23.3",

@@ -3,6 +3,7 @@ const pino = require('pino');
 const mediaWatcher = require('./mediaWatcher');
 const router = require('./router');
 const { emitEvent } = require('./monitorClient');
+const { startDashboard } = require('./dashboardServer');
 
 const APPEND_IDLE_DELAY = 3000; // 3 segundos sem mensagens append = sync terminado
 let syncCompleted = false;
@@ -177,4 +178,8 @@ async function start() {
   });
 }
 
-start().catch(console.error);
+startDashboard();
+start().catch(error => {
+  emitEvent({ module: 'system', severity: 'error', eventType: 'process_error', message: 'Processo principal encerrou com erro', details: { error: error.message } });
+  console.error(error);
+});

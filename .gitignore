@@ -58,3 +58,7 @@ shared_state.json
 .notion-sync.lock
 licitacoes_*.json
 relatorio_*.pdf
+
+# Central operacional local
+monitor_events.jsonl
+monitor_events.jsonl.*

@@ -1,35 +1,58 @@
-const https = require('https');
-const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const dotenv = require('dotenv');
-
 dotenv.config();
 
-const MONITOR_URL = process.env.MONITOR_URL;
-const MONITOR_SECRET = process.env.MONITOR_INGEST_SECRET;
+const LOG_PATH = path.resolve(process.env.MONITOR_LOG_PATH || './monitor_events.jsonl');
 const SENSITIVE_KEY = /(token|secret|password|authorization|cookie|session|credential|api.?key|path|cwd|auth|qr)/i;
+let writeChain = Promise.resolve();
 
-function clean(value, depth = 0) {
+function cleanText(value, maxLength) {
+  if (value === null || value === undefined) return null;
+  return String(value)
+    .replace(/(?:Bearer\s+|token|secret|password|authorization|cookie|session|credential|api.?key)\s*[:=]?\s*[^\s,;]+/gi, '[redacted]')
+    .replace(/[A-Za-z]:[\\/][^\n]+/g, '[redacted-path]')
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function cleanValue(value, depth = 0) {
   if (depth > 2 || value === null || value === undefined) return undefined;
-  if (typeof value === 'string') return value.replace(/[\\r\\n]+/g, ' ').replace(/[A-Za-z]:\\[^ ]+/g, '[redacted]').slice(0, 500);
+  if (typeof value === 'string') return cleanText(value, 500);
   if (typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value).filter(([key]) => !SENSITIVE_KEY.test(key)).map(([key, item]) => [key, clean(item, depth + 1)]));
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !SENSITIVE_KEY.test(key)).map(([key, item]) => [key, cleanValue(item, depth + 1)]));
+}
+
+function sanitizeEvent(event) {
+  return {
+    occurredAt: new Date().toISOString(),
+    module: cleanText(event.module, 32) || 'system',
+    severity: ['debug', 'info', 'warn', 'error'].includes(event.severity) ? event.severity : 'info',
+    eventType: cleanText(event.eventType, 64) || 'unknown',
+    groupLabel: cleanText(event.groupLabel, 160),
+    senderLabel: cleanText(event.senderLabel, 120),
+    mediaLabel: cleanText(event.mediaLabel, 180),
+    message: cleanText(event.message, 4000) || '[evento sem mensagem]',
+    details: cleanValue(event.details) || {},
+  };
 }
 
 function emitEvent(event) {
-  if (!MONITOR_URL || !MONITOR_SECRET) return;
-  try {
-    const target = new URL('/api/monitoring/events', MONITOR_URL);
-    const body = JSON.stringify({ ...event, details: clean(event.details) });
-    const transport = target.protocol === 'https:' ? https : http;
-    const request = transport.request(target, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body), 'x-monitor-ingest-secret': MONITOR_SECRET },
-      timeout: 3000,
-    });
-    request.on('error', () => {});
-    request.on('timeout', () => request.destroy());
-    request.end(body);
-  } catch (_) {}
+  const safeEvent = sanitizeEvent(event);
+  writeChain = writeChain.then(async () => {
+    await fs.promises.appendFile(LOG_PATH, JSON.stringify(safeEvent) + '\n', 'utf8');
+  }).catch(() => {});
 }
 
-module.exports = { emitEvent };
+function readEvents(limit = 300) {
+  try {
+    if (!fs.existsSync(LOG_PATH)) return [];
+    const lines = fs.readFileSync(LOG_PATH, 'utf8').trim().split('\n').filter(Boolean);
+    return lines.slice(-Math.min(limit, 1000)).map(line => JSON.parse(line)).reverse();
+  } catch (_) {
+    return [];
+  }
+}
+
+module.exports = { emitEvent, readEvents, LOG_PATH, sanitizeEvent };

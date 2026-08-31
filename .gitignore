@@ -7,7 +7,7 @@ node_modules/
 !.env.example
 
 # WhatsApp authentication / sessions
-web_auth/
+wweb_auth/
 auth_info/
 .wwebjs_auth/
 .wwebjs_cache/

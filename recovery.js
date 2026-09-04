@@ -274,6 +274,7 @@ async function runRecoveryForObra(client, obra, groupId) {
   try {
     targetChat = await client.getChatById(groupId);
     console.log(`      📂 Grupo acessado: ${targetChat.name}`);
+    emitEvent({ module: 'recovery', severity: 'info', eventType: 'group_checked', message: 'Grupo carregado para verificação histórica', groupLabel: obra.nome || targetChat.name || 'grupo configurado' });
   } catch (chatErr) {
     console.error(`      ❌ getChatById falhou: ${chatErr.message}`);
     targetChat = { id: { _serialized: groupId }, name: obra.nome || 'Grupo' };
@@ -302,6 +303,7 @@ async function runRecoveryForObra(client, obra, groupId) {
       const currentCount = batch ? batch.length : 0;
 
       console.log(`      📥 Tentativa ${attempt}/${MAX_FETCH_ATTEMPTS}: ${currentCount} mensagens retornadas.`);
+      emitEvent({ module: 'recovery', severity: 'debug', eventType: 'history_batch_checked', message: 'Lote de histórico verificado', groupLabel: obra.nome || targetChat.name || 'grupo configurado', details: { attempt, messagesReturned: currentCount } });
 
       // Adiciona mensagens novas (evita duplicatas por ID)
       const existingIds = new Set(allMessages.map(m => m.id.id));
@@ -362,6 +364,7 @@ async function runRecoveryForObra(client, obra, groupId) {
   const targetMessages = reversed.filter(msg => isDate(msg.timestamp, targetDateStr));
 
   console.log(`      📊 Analisando ${targetMessages.length} mensagens do dia ${targetDateStr} (filtradas de ${reversed.length} total)...`);
+  emitEvent({ module: 'recovery', severity: 'info', eventType: 'history_ready_for_processing', message: 'Histórico pronto para análise', groupLabel: obra.nome || targetChat.name || 'grupo configurado', details: { messagesLoaded: allMessages.length, targetMessages: targetMessages.length } });
 
   if (targetMessages.length === 0) {
     console.log(`      ⏹️  Nenhuma mensagem do dia ${targetDateStr} encontrada neste grupo.`);
@@ -497,12 +500,12 @@ async function runRecovery() {
     process.exit(1);
   }
 
-  const obrasAtivas = Object.entries(obras).filter(([_, obra]) => obra.ativo !== false);
+    const obrasAtivas = Object.entries(obras).filter(([_, obra]) => obra.ativo !== false);
+  emitEvent({ module: 'recovery', severity: obrasAtivas.length ? 'info' : 'warn', eventType: 'groups_loaded', message: obrasAtivas.length ? 'Grupos ativos carregados para recovery' : 'Nenhum grupo ativo configurado para recovery', details: { activeGroups: obrasAtivas.length } });
   if (obrasAtivas.length === 0) {
-    console.log('ℹ️  Nenhuma obra ativa encontrada. Saindo.');
+    console.log('ℹ️  Nenhuma obra ativa encontrada. Verifique obras.json.');
     process.exit(0);
   }
-
   console.log(`   Obras ativas para recovery: ${obrasAtivas.length}`);
 
   const timeoutId = setTimeout(() => {
@@ -631,9 +634,14 @@ async function runRecovery() {
 // ENTRY POINT
 // ============================================================
 function shouldRun() {
+  const manual = process.argv.includes('--manual');
+  if (manual) {
+    console.log('🛠️  Recovery manual solicitado. A verificação histórica será executada independentemente do estado anterior.');
+    return true;
+  }
   try {
     if (!fs.existsSync(STATE_FILE)) {
-      console.log('ℹ️  shared_state.json não encontrado. Saindo.');
+      console.log('ℹ️  shared_state.json não encontrado. Recovery automático não será executado.');
       return false;
     }
     const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));

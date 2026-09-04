@@ -741,7 +741,7 @@ function startRecovery(trigger = 'automatic') {
   console.log('🚨 Iniciando módulo de recuperação (whatsapp-web.js)');
   console.log('🚨 ================================================');
 
-  recoveryProcess = spawn('node', ['recovery.js'], {
+  recoveryProcess = spawn('node', ['recovery.js', ...(trigger === 'manual' ? ['--manual'] : [])], {
     stdio: 'inherit',
     cwd: process.cwd()
   });

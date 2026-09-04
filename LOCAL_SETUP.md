@@ -39,3 +39,9 @@ npm run sync       # sincroniza o cache do Notion
 ```
 
 Para um processo contínuo em Windows, use o Agendador de Tarefas ou PM2. A central é um servidor HTTP local criado pelo mesmo processo do bot; portanto, não é necessário iniciar outro projeto ou serviço.
+
+## Recovery manual
+
+Na central local, o botão **Forçar recovery** executa `recovery.js --manual`. O modo manual não depende de `shared_state.json` nem de uma desconexão antiga: ele carrega `obras.json`, lista as obras ativas, acessa cada grupo no WhatsApp Web, chama `fetchMessages`, filtra as mensagens do dia configurado e processa as mídias que ainda não estão no cache.
+
+A timeline mostra `groups_loaded`, `group_checked`, `history_batch_checked`, `history_ready_for_processing`, `media_saved`, `recovery_completed` ou os erros correspondentes. Se aparecer `Nenhum grupo ativo configurado`, verifique se `obras.json` existe e se as entradas não estão com `ativo: false`.

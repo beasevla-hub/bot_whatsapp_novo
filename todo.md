@@ -35,3 +35,11 @@
 - [x] Publicar eventos de início, bloqueio, conclusão e falha do recovery manual
 - [x] Adicionar botão verde com confirmação e feedback visual
 - [x] Testar acionamento, execução concorrente e atualização do status
+
+# Correção do recovery manual
+
+- [x] Permitir que recovery manual execute mesmo sem desconexão registrada
+- [x] Confirmar carregamento das obras e grupos configurados
+- [x] Verificar histórico de cada grupo e processar mídias candidatas
+- [x] Registrar contagem de grupos, mensagens, mídias baixadas e duplicadas
+- [x] Testar recovery manual sem sessão real do WhatsApp

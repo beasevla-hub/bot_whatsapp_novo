@@ -28,3 +28,10 @@
 - [x] Atualizar a central para mostrar estados reais e mensagens operacionais claras
 - [x] Criar testes de transição de estados e cenários de falha
 - [x] Documentar a operação simplificada e validar o fluxo completo
+
+# Recovery manual pela central
+
+- [x] Criar endpoint local para acionar recovery com confirmação e lock
+- [x] Publicar eventos de início, bloqueio, conclusão e falha do recovery manual
+- [x] Adicionar botão verde com confirmação e feedback visual
+- [x] Testar acionamento, execução concorrente e atualização do status

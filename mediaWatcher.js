@@ -726,14 +726,17 @@ function checkIfRecoveryNeeded() {
   }
 }
 
-function startRecovery() {
+function startRecovery(trigger = 'automatic') {
   if (recoveryProcess) {
     console.log('   ⚠️  Recovery já está rodando. Aguardando...');
-    return;
+    emitEvent({ module: 'recovery', severity: 'warn', eventType: 'recovery_already_running', message: 'Recovery solicitado, mas já existe uma execução ativa', details: { trigger } });
+    return false;
   }
 
   console.log('');
   console.log('🚨 ================================================');
+  console.log(`🚨 Recovery iniciado (${trigger})`);
+  emitEvent({ module: 'recovery', severity: 'info', eventType: 'recovery_started', message: 'Recovery iniciado', details: { trigger } });
   console.log('🚨 BAILEYS DETECTOU PERÍODO OFFLINE SIGNIFICATIVO');
   console.log('🚨 Iniciando módulo de recuperação (whatsapp-web.js)');
   console.log('🚨 ================================================');
@@ -759,10 +762,10 @@ function startRecovery() {
   recoveryProcess.on('error', (err) => {
     console.error('');
     console.error('❌ Erro ao iniciar recovery:', err.message);
-    recoveryProcess = null;
+        recoveryProcess = null;
   });
+  return true;
 }
-
 // ============================================================
 // INIT (chamado pelo index.js na inicialização)
 // ============================================================

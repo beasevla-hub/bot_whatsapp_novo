@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { readEvents, LOG_PATH } = require('./monitorClient');
+const mediaWatcher = require('./mediaWatcher');
 
 const DASHBOARD_PORT = Number(process.env.DASHBOARD_PORT || 8787);
 const PUBLIC_DIR = path.join(__dirname, 'dashboard');
@@ -45,6 +46,10 @@ function health() {
 function startDashboard() {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (url.pathname === '/api/recovery/force' && req.method === 'POST') {
+      const started = mediaWatcher.startRecovery('manual');
+      return json(res, started ? 202 : 409, { ok: started, status: started ? 'started' : 'already_running' });
+    }
     if (url.pathname === '/api/events') return json(res, 200, filteredEvents(url));
     if (url.pathname === '/api/health') return json(res, 200, health());
     if (url.pathname === '/api/status') return json(res, 200, { ok: true, dashboard: 'local', port: DASHBOARD_PORT });

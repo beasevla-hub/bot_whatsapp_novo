@@ -45,3 +45,9 @@ Para um processo contínuo em Windows, use o Agendador de Tarefas ou PM2. A cent
 Na central local, o botão **Forçar recovery** executa `recovery.js --manual`. O modo manual não depende de `shared_state.json` nem de uma desconexão antiga: ele carrega `obras.json`, lista as obras ativas, acessa cada grupo no WhatsApp Web, chama `fetchMessages`, filtra as mensagens do dia configurado e processa as mídias que ainda não estão no cache.
 
 A timeline mostra `groups_loaded`, `group_checked`, `history_batch_checked`, `history_ready_for_processing`, `media_saved`, `recovery_completed` ou os erros correspondentes. Se aparecer `Nenhum grupo ativo configurado`, verifique se `obras.json` existe e se as entradas não estão com `ativo: false`.
+
+## Central por obra
+
+A tela inicial mostra somente as obras ativas encontradas em `obras.json`. Ao selecionar uma obra na barra lateral, a central carrega as mensagens recentes associadas ao grupo, o histórico compacto de imagens salvas e a atividade operacional daquele grupo. Cada arquivo `Imagem_###` pode ser aberto em uma janela interna, sem revelar o caminho absoluto da máquina.
+
+O dashboard continua local em `http://127.0.0.1:8787`. A API interna usa `/api/obras`, `/api/obras/:id` e `/api/obras/:id/media/:arquivo`; esses endpoints são servidos apenas pelo processo local e não devem ser expostos diretamente à internet.

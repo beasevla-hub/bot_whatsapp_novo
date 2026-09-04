@@ -43,3 +43,14 @@
 - [x] Verificar histórico de cada grupo e processar mídias candidatas
 - [x] Registrar contagem de grupos, mensagens, mídias baixadas e duplicadas
 - [x] Testar recovery manual sem sessão real do WhatsApp
+
+# Redesign minimalista da central
+
+- [x] Mapear obras ativas, mensagens recentes e arquivos de mídia disponíveis
+- [x] Criar navegação lateral por obra ativa
+- [x] Criar API local de resumo e detalhe por obra sem expor caminhos sensíveis
+- [x] Exibir últimas mensagens e histórico compacto de imagens por obra
+- [x] Criar visualizador interno de imagem com fechamento acessível
+- [x] Reestruturar frontend em dark mode minimalista e responsivo
+- [x] Validar navegação, endpoints, acessibilidade e visual em desktop/mobile
+- [x] Enviar redesign e documentação atualizada ao GitHub

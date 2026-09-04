@@ -3,70 +3,24 @@ const fs = require('fs');
 const path = require('path');
 const { readEvents, LOG_PATH } = require('./monitorClient');
 const mediaWatcher = require('./mediaWatcher');
-
 const DASHBOARD_PORT = Number(process.env.DASHBOARD_PORT || 8787);
 const PUBLIC_DIR = path.join(__dirname, 'dashboard');
-
-function json(res, status, value) {
-  const body = JSON.stringify(value);
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-  res.end(body);
-}
-
-function filteredEvents(url) {
-  const query = url.searchParams;
-  const module = query.get('module');
-  const severity = query.get('severity');
-  const group = query.get('group');
-  const search = (query.get('search') || '').toLowerCase();
-  const from = query.get('from') ? new Date(`${query.get('from')}T00:00:00`).getTime() : 0;
-  const to = query.get('to') ? new Date(`${query.get('to')}T23:59:59`).getTime() : Infinity;
-  const offset = Math.max(Number(query.get('offset') || 0), 0);
-  const limit = Math.min(Math.max(Number(query.get('limit') || 50), 1), 100);
-  const all = readEvents(1000).filter(event => {
-    const occurred = new Date(event.occurredAt).getTime();
-    const haystack = `${event.eventType} ${event.message} ${event.groupLabel || ''} ${event.senderLabel || ''}`.toLowerCase();
-    return (!module || module === 'all' || event.module === module) && (!severity || severity === 'all' || event.severity === severity) && (!group || (event.groupLabel || '').toLowerCase().includes(group.toLowerCase())) && (!search || haystack.includes(search)) && occurred >= from && occurred <= to;
-  });
-  const items = all.slice(offset, offset + limit);
-  return { items, hasMore: offset + limit < all.length, nextOffset: offset + items.length, total: all.length };
-}
-
-function health() {
-  const events = readEvents(1000);
-  const modules = ['baileys', 'recovery', 'tablebot', 'notion'];
-  const latestByModule = Object.fromEntries(modules.map(module => [module, events.find(event => event.module === module) || null]));
-  const recentFailures = events.filter(event => event.severity === 'error').slice(0, 5);
-  const queue = events.find(event => event.eventType.includes('queue'));
-  const recovery = events.find(event => event.module === 'recovery');
-  const hourAgo = Date.now() - 3600000;
-  return { latestByModule, eventsLastHour: events.filter(event => new Date(event.occurredAt).getTime() >= hourAgo).length, warnings: events.filter(event => event.severity === 'warn').length, errors: events.filter(event => event.severity === 'error').length, lastActivityAt: events[0]?.occurredAt || null, queueStatus: queue?.message || 'Sem sinal de fila', recoveryStatus: recovery?.message || 'Sem execução recente', recentFailures, logPath: path.basename(LOG_PATH) };
-}
-
-function startDashboard() {
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    if (url.pathname === '/api/recovery/force' && req.method === 'POST') {
-      const started = mediaWatcher.startRecovery('manual');
-      return json(res, started ? 202 : 409, { ok: started, status: started ? 'started' : 'already_running' });
-    }
-    if (url.pathname === '/api/events') return json(res, 200, filteredEvents(url));
-    if (url.pathname === '/api/health') return json(res, 200, health());
-    if (url.pathname === '/api/status') return json(res, 200, { ok: true, dashboard: 'local', port: DASHBOARD_PORT });
-    const requested = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\//, '');
-    const filePath = path.resolve(PUBLIC_DIR, requested);
-    if (!filePath.startsWith(path.resolve(PUBLIC_DIR))) return json(res, 403, { error: 'forbidden' });
-    fs.readFile(filePath, (error, data) => {
-      if (error) return json(res, 404, { error: 'not_found' });
-      const contentType = filePath.endsWith('.css') ? 'text/css' : filePath.endsWith('.js') ? 'text/javascript' : 'text/html';
-      res.writeHead(200, { 'content-type': `${contentType}; charset=utf-8`, 'cache-control': 'no-store' });
-      res.end(data);
-    });
-  });
-  server.listen(DASHBOARD_PORT, '127.0.0.1', () => console.log(`[Dashboard] Central local em http://127.0.0.1:${DASHBOARD_PORT}`));
-  return server;
-}
-
+const OBRAS_PATH = path.resolve(process.env.OBRAS_PATH || './obras.json');
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif']);
+function json(res, status, value) { const body = JSON.stringify(value); res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(body); }
+function loadObras() { try { return JSON.parse(fs.readFileSync(OBRAS_PATH, 'utf8')); } catch (_) { return {}; } }
+function obraLabel(obra, id) { return obra.nome || obra.obra || `Obra ${id.slice(0, 6)}`; }
+function listObras() { return Object.entries(loadObras()).filter(([, obra]) => obra && obra.ativo !== false).map(([id, obra]) => ({ id, label: obraLabel(obra, id), code: obra.obra || (obra.nome || '').match(/\b\d{2,4}\b/)?.[0] || null })); }
+function findObra(id) { const obras = loadObras(); const obra = obras[id]; return obra && obra.ativo !== false ? { id, obra, label: obraLabel(obra, id) } : null; }
+function matchesGroup(event, item) { const label = (event.groupLabel || '').toLowerCase(); return label === item.label.toLowerCase() || label.includes(item.label.toLowerCase()) || (item.obra.nome || '').toLowerCase().includes(label) && label.length > 3; }
+function eventsForObra(item) { return readEvents(1000).filter(event => matchesGroup(event, item)); }
+function walkImages(dir, result, depth = 0) { if (!dir || depth > 3 || !fs.existsSync(dir)) return; let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; } for (const entry of entries) { const full = path.join(dir, entry.name); if (entry.isDirectory()) walkImages(full, result, depth + 1); else if (entry.isFile() && entry.name.startsWith('Imagem_') && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) { try { const stat = fs.statSync(full); result.push({ fileName: entry.name, modifiedAt: stat.mtime.toISOString(), size: stat.size, full }); } catch (_) {} } } }
+function imagesForObra(item) { const result = []; walkImages(item.obra.caminho, result); return result.sort((a, b) => new Date(b.modifiedAt) - new Date(a.modifiedAt)).slice(0, 100); }
+function filteredEvents(url) { const query = url.searchParams; const module = query.get('module'); const severity = query.get('severity'); const group = query.get('group'); const search = (query.get('search') || '').toLowerCase(); const from = query.get('from') ? new Date(`${query.get('from')}T00:00:00`).getTime() : 0; const to = query.get('to') ? new Date(`${query.get('to')}T23:59:59`).getTime() : Infinity; const offset = Math.max(Number(query.get('offset') || 0), 0); const limit = Math.min(Math.max(Number(query.get('limit') || 50), 1), 100); const all = readEvents(1000).filter(event => { const occurred = new Date(event.occurredAt).getTime(); const haystack = `${event.eventType} ${event.message} ${event.groupLabel || ''} ${event.senderLabel || ''} ${event.details?.textPreview || ''}`.toLowerCase(); return (!module || module === 'all' || event.module === module) && (!severity || severity === 'all' || event.severity === severity) && (!group || (event.groupLabel || '').toLowerCase().includes(group.toLowerCase())) && (!search || haystack.includes(search)) && occurred >= from && occurred <= to; }); const items = all.slice(offset, offset + limit); return { items, hasMore: offset + limit < all.length, nextOffset: offset + items.length, total: all.length }; }
+function health() { const events = readEvents(1000); const modules = ['baileys', 'recovery', 'tablebot', 'notion']; const latestByModule = Object.fromEntries(modules.map(module => [module, events.find(event => event.module === module) || null])); const recentFailures = events.filter(event => event.severity === 'error').slice(0, 5); const queue = events.find(event => event.eventType.includes('queue')); const recovery = events.find(event => event.module === 'recovery'); const hourAgo = Date.now() - 3600000; return { latestByModule, eventsLastHour: events.filter(event => new Date(event.occurredAt).getTime() >= hourAgo).length, warnings: events.filter(event => event.severity === 'warn').length, errors: events.filter(event => event.severity === 'error').length, lastActivityAt: events[0]?.occurredAt || null, queueStatus: queue?.message || 'Sem sinal de fila', recoveryStatus: recovery?.message || 'Sem execução recente', recentFailures, logPath: path.basename(LOG_PATH) }; }
+function obraDetails(id) { const item = findObra(id); if (!item) return null; const events = eventsForObra(item); const messages = events.filter(event => event.eventType === 'message_received' || event.eventType === 'table_command_received').slice(0, 30); const media = imagesForObra(item).map(({ fileName, modifiedAt, size }) => ({ fileName, modifiedAt, size, url: `/api/obras/${encodeURIComponent(id)}/media/${encodeURIComponent(fileName)}` })); return { ...listObras().find(obra => obra.id === id), messages, media, recentEvents: events.slice(0, 40) }; }
+function contentType(file) { return { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.heic': 'image/heic', '.heif': 'image/heif' }[path.extname(file).toLowerCase()] || 'application/octet-stream'; }
+function serveImage(res, id, filename) { const item = findObra(id); const safeName = path.basename(filename); if (!item || safeName !== filename || !safeName.startsWith('Imagem_')) return json(res, 404, { error: 'not_found' }); const match = imagesForObra(item).find(image => image.fileName === safeName); if (!match) return json(res, 404, { error: 'not_found' }); fs.readFile(match.full, (error, data) => { if (error) return json(res, 404, { error: 'not_found' }); res.writeHead(200, { 'content-type': contentType(safeName), 'cache-control': 'private, max-age=60' }); res.end(data); }); }
+function startDashboard() { const server = http.createServer((req, res) => { const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); const obraMedia = url.pathname.match(/^\/api\/obras\/([^/]+)\/media\/([^/]+)$/); const obraRoute = url.pathname.match(/^\/api\/obras\/([^/]+)$/); if (obraMedia && req.method === 'GET') return serveImage(res, decodeURIComponent(obraMedia[1]), decodeURIComponent(obraMedia[2])); if (url.pathname === '/api/recovery/force' && req.method === 'POST') { const started = mediaWatcher.startRecovery('manual'); return json(res, started ? 202 : 409, { ok: started, status: started ? 'started' : 'already_running' }); } if (url.pathname === '/api/obras' && req.method === 'GET') return json(res, 200, { items: listObras() }); if (obraRoute && req.method === 'GET') { const details = obraDetails(decodeURIComponent(obraRoute[1])); return details ? json(res, 200, details) : json(res, 404, { error: 'obra_not_found' }); } if (url.pathname === '/api/events') return json(res, 200, filteredEvents(url)); if (url.pathname === '/api/health') return json(res, 200, health()); if (url.pathname === '/api/status') return json(res, 200, { ok: true, dashboard: 'local', port: DASHBOARD_PORT }); const requested = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\//, ''); const filePath = path.resolve(PUBLIC_DIR, requested); if (!filePath.startsWith(path.resolve(PUBLIC_DIR))) return json(res, 403, { error: 'forbidden' }); fs.readFile(filePath, (error, data) => { if (error) return json(res, 404, { error: 'not_found' }); const content = filePath.endsWith('.css') ? 'text/css' : filePath.endsWith('.js') ? 'text/javascript' : 'text/html'; res.writeHead(200, { 'content-type': `${content}; charset=utf-8`, 'cache-control': 'no-store' }); res.end(data); }); }); server.listen(DASHBOARD_PORT, '127.0.0.1', () => console.log(`[Dashboard] Central local em http://127.0.0.1:${DASHBOARD_PORT}`)); return server; }
 if (require.main === module) startDashboard();
-
-module.exports = { startDashboard };
+module.exports = { startDashboard, listObras, obraDetails };

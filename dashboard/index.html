@@ -3,19 +3,36 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Command Center · WhatsApp Obras</title>
+  <title>Obras · Central local</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <aside class="sidebar"><div class="brand"><span class="pulse">◉</span><span><strong>Command Center</strong><small>WhatsApp Obras</small></span></div><nav><a class="active" href="#overview">▦ Visão geral</a><a href="#timeline">◌ Linha do tempo</a><a href="#diagnostics">⌁ Diagnóstico</a></nav><div class="sidebar-foot">LOCAL · 127.0.0.1:8787<br><span>Eventos sanitizados</span></div></aside>
-  <main class="main">
-    <header class="hero"><div><div class="eyebrow"><span class="live-dot"></span> operação em tempo real</div><h1>Central de <em>Monitoramento</em></h1><p>Um cockpit para acompanhar conexões, mídias arquivadas, tabelas e recuperação sem sair da sua máquina.</p></div><div class="connection"><span class="live-dot"></span><div><strong id="connectionText">Painel local conectado</strong><small>atualização automática</small></div></div></header>
-    <section id="overview" class="module-grid" aria-label="Status dos módulos"><div id="module-grid" class="module-grid-inner"></div></section>
-    <section class="metrics"><div class="metric"><span class="metric-icon">⌁</span><div><strong id="eventsHour">0</strong><small>eventos na última hora</small></div></div><div class="metric warning"><span class="metric-icon">△</span><div><strong id="warnings">0</strong><small>alertas ativos</small></div></div><div class="metric danger"><span class="metric-icon">⊗</span><div><strong id="errors">0</strong><small>falhas recentes</small></div></div></section>
-    <section id="timeline" class="panel"><div class="panel-head"><div><div class="title-row"><span class="signal">◉</span><h2>Linha do tempo operacional</h2></div><p>Histórico local persistente, com dados sanitizados</p></div><div class="actions"><button id="recoveryButton" class="button recovery-button">↻ Forçar recovery</button><button id="liveButton" class="button active">↻ Ao vivo</button><button id="refreshButton" class="button">↻ Atualizar</button></div></div><div class="filters"><input id="search" placeholder="Buscar evento ou mensagem..." /><input id="group" placeholder="Obra / grupo" /><select id="module"><option value="all">Todos os módulos</option><option value="baileys">Baileys</option><option value="recovery">Recovery</option><option value="tablebot">Bot de tabelas</option><option value="notion">Notion</option></select><select id="severity"><option value="all">Todas severidades</option><option value="info">Informação</option><option value="debug">Debug</option><option value="warn">Alerta</option><option value="error">Erro</option></select><input id="from" type="date" aria-label="Data inicial" /><input id="to" type="date" aria-label="Data final" /></div><div id="timelineRows" class="timeline"><div class="empty">Carregando histórico...</div></div><div class="pager"><span id="pageLabel">Página 1</span><div><button id="previous" class="button" disabled>Anterior</button><button id="next" class="button">Próxima</button></div></div></section>
-    <section id="diagnostics" class="lower-grid"><div class="panel diagnosis"><div class="title-row"><span class="signal">♡</span><h2>Diagnóstico rápido</h2></div><div class="diagnostic-grid"><div><small>última atividade</small><strong id="lastActivity">—</strong></div><div><small>fila</small><strong id="queueStatus">—</strong></div><div><small>recovery</small><strong id="recoveryStatus">—</strong></div><div><small>arquivo de log</small><strong id="logPath">—</strong></div></div></div><div class="panel protected"><span class="shield">⌾</span><h2>Operação protegida</h2><p>O painel local nunca exibe credenciais, sessões ou caminhos reais das obras.</p><span class="safe">✓ redaction ativa</span></div></section>
-    <section class="panel failures"><div class="title-row"><span class="danger-icon">△</span><h2>Falhas recentes</h2></div><div id="failuresList" class="failures-list"><div class="empty">Nenhuma falha registrada.</div></div></section>
-  </main>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegação das obras">
+      <div class="brand"><span class="brand-mark">⌁</span><div><strong>Obras</strong><span>central local</span></div></div>
+      <div class="side-heading"><span>Projetos ativos</span><b id="obraCount">0</b></div>
+      <nav id="obraList" class="obra-list"><div class="loading">Carregando obras…</div></nav>
+      <div class="sidebar-footer"><span class="status-dot"></span><span>Monitoramento local</span><small>127.0.0.1:8787</small></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div><div class="crumb">CENTRAL / <span id="crumbName">VISÃO GERAL</span></div><h1 id="pageTitle">Visão geral</h1></div>
+        <div class="top-actions"><span id="connection" class="connection"><i></i> conectado</span><button id="recoveryButton" class="button button-warning">↻ <span>Forçar recovery</span></button></div>
+      </header>
+      <section id="overviewView" class="view">
+        <div class="welcome"><div><p class="eyebrow">acompanhamento simples</p><h2>O que está acontecendo?</h2><p>Escolha uma obra ao lado para ver as últimas mensagens e fotos recebidas.</p></div><div class="welcome-mark">⌁</div></div>
+        <div class="overview-head"><h2>Suas obras</h2><span id="overviewHint">selecione uma obra para abrir</span></div>
+        <div id="overviewGrid" class="overview-grid"></div>
+      </section>
+      <section id="obraView" class="view hidden">
+        <div class="obra-header"><div><p class="eyebrow">obra selecionada</p><h2 id="obraTitle">—</h2><p id="obraSubtitle" class="muted">Atualizando automaticamente</p></div><div class="obra-live"><span class="status-dot"></span><span id="obraActivity">sem atividade</span></div></div>
+        <div class="summary-grid"><div class="summary-card"><span class="summary-icon">◷</span><div><strong id="lastActivity">—</strong><small>última atividade</small></div></div><div class="summary-card"><span class="summary-icon">▣</span><div><strong id="photoCount">0</strong><small>fotos encontradas</small></div></div><div class="summary-card"><span class="summary-icon">☷</span><div><strong id="messageCount">0</strong><small>mensagens recentes</small></div></div></div>
+        <div class="content-grid"><section class="panel"><div class="panel-head"><div><h3>Últimas mensagens</h3><p>Comandos e mensagens recebidas nesta obra</p></div><span class="panel-icon">☷</span></div><div id="messages" class="message-list"><div class="empty">Nenhuma mensagem registrada.</div></div></section><section class="panel"><div class="panel-head"><div><h3>Fotos salvas</h3><p>Clique em uma imagem para ampliar</p></div><span class="panel-icon">▧</span></div><div id="media" class="media-list"><div class="empty">Nenhuma foto encontrada.</div></div></section></div>
+        <section class="panel activity-panel"><div class="panel-head"><div><h3>Atividade da obra</h3><p>Últimos eventos operacionais</p></div><button id="toggleActivity" class="text-button">mostrar detalhes</button></div><div id="events" class="event-list collapsed"><div class="empty">Nenhum evento registrado.</div></div></section>
+      </section>
+    </main>
+  </div>
+  <div id="imageModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-backdrop" data-close="true"></div><div class="modal-card"><button id="closeModal" class="modal-close" aria-label="Fechar imagem">×</button><p class="eyebrow">visualização</p><h2 id="modalTitle">Imagem</h2><img id="modalImage" alt="Imagem da obra" /><p id="modalMeta" class="muted"></p></div></div>
   <script src="/app.js"></script>
 </body>
 </html>

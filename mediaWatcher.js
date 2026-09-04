@@ -653,6 +653,8 @@ async function processSingleMessage(msg, sock, groupName, ctx, silent = false) {
 
   if (TEXT_TYPES.includes(messageType)) {
     addTranscriptEntry(msg, groupName, ctx);
+    const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.editedMessage?.message?.conversation || '';
+    emitEvent({ module: 'baileys', severity: 'info', eventType: 'message_received', message: 'Mensagem recebida na obra', groupLabel: groupName, senderLabel: msgParticipant(msg), details: { textPreview: text.trim().slice(0, 240) } });
     return 'text';
   }
 

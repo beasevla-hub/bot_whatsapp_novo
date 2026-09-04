@@ -122,7 +122,6 @@ const pino = require('pino');
 const STORE_FILE = './baileys_store.json';
 const STATE_FILE = './shared_state.json';
 const TIMEZONE = 'America/Sao_Paulo';
-const APPEND_IDLE_DELAY = 3000;
 
 // ============================================================
 // ESTADO POR OBRA (contextos isolados)
@@ -130,9 +129,8 @@ const APPEND_IDLE_DELAY = 3000;
 const obraContexts = new Map();
 let store = null;
 let isSyncing = false;
-let syncCompleted = false;
-let appendIdleTimer = null;
 let recoveryProcess = null;
+let transcriptTimer = null;
 
 // ============================================================
 // TIPOS DE MENSAGEM CONHECIDOS
@@ -625,7 +623,8 @@ function generateTranscript(ctx) {
 }
 
 function scheduleTranscript() {
-  setInterval(() => {
+  if (transcriptTimer) return;
+  transcriptTimer = setInterval(() => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('pt-BR', { timeZone: TIMEZONE, hour12: false });
     if (timeStr === '23:59:00' || timeStr === '23:59:01') {
@@ -769,7 +768,7 @@ function startRecovery() {
 // ============================================================
 function init() {
   scheduleTranscript();
-  console.log('📚 MediaWatcher inicializado. Store e transcript agendados.');
+  if (!store) console.log('📚 MediaWatcher inicializado. Store e transcript agendados.');
 }
 
 module.exports = {

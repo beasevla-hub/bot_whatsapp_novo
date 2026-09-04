@@ -6,11 +6,29 @@ const { emitEvent } = require('./monitorClient');
 const { startDashboard } = require('./dashboardServer');
 
 const APPEND_IDLE_DELAY = 3000; // 3 segundos sem mensagens append = sync terminado
-let syncCompleted = false;
+let historySyncState = 'pending';
 let appendIdleTimer = null;
 let messageQueue = Promise.resolve();
 let persistTimer = null;
 let reconnectTimer = null;
+
+// ============================================================
+// IMPORTAÇÃO HISTÓRICA NÃO BLOQUEANTE
+// ============================================================
+function scheduleHistorySync(sock, source) {
+  if (historySyncState === 'done' || historySyncState === 'running') return;
+  historySyncState = 'running';
+  emitEvent({ module: 'baileys', severity: 'info', eventType: 'history_import_started', message: `Importação histórica iniciada (${source})` });
+  mediaWatcher.runSync(sock)
+    .then(() => {
+      historySyncState = 'done';
+      emitEvent({ module: 'baileys', severity: 'info', eventType: 'history_import_completed', message: 'Importação histórica concluída' });
+    })
+    .catch(error => {
+      historySyncState = 'failed';
+      emitEvent({ module: 'baileys', severity: 'error', eventType: 'history_import_error', message: 'Falha na importação histórica', details: { error: error.message } });
+    });
+}
 
 // ============================================================
 // ENTRY POINT ÚNICO
@@ -91,11 +109,10 @@ async function start() {
         console.log('⚠️ Você deslogou pelo celular. Delete a pasta auth_info e rode de novo.');
       }
     } else if (connection === 'open') {
-      syncCompleted = false;
-      console.log('✅ Conexão estabelecida e blindada contra quedas!');
+      historySyncState = 'pending';
+      console.log('✅ Conexão estabelecida; captura ao vivo está ativa.');
       emitEvent({ module: 'baileys', severity: 'info', eventType: 'connection_open', message: 'Conexão Baileys estabelecida' });
-      console.log('   Aguardando sync inicial...');
-
+            console.log('   A importação histórica será processada separadamente, sem bloquear mensagens novas.');
       const needsRecovery = mediaWatcher.checkIfRecoveryNeeded();
       if (needsRecovery) {
         mediaWatcher.updateSharedState({
@@ -118,28 +135,22 @@ async function start() {
   sock.ev.on('messaging-history.set', async ({ chats, contacts, messages, syncType, isLatest }) => {
     console.log('');
     console.log(`📜 messaging-history.set: ${messages?.length || 0} mensagens (isLatest: ${isLatest}, type: ${syncType})`);
-    if (isLatest === true && !syncCompleted) {
-      syncCompleted = true;
-      console.log('   ✅ Sync completo (messaging-history.set). Iniciando sincronizador...');
-      await mediaWatcher.runSync(sock);
+    if (isLatest === true) {
+      scheduleHistorySync(sock, 'messaging-history.set');
     }
   });
 
   sock.ev.on('chats.set', async ({ chats, isLatest }) => {
     console.log(`📜 chats.set: ${chats?.length || 0} chats (isLatest: ${isLatest})`);
-    if (isLatest === true && !syncCompleted) {
-      syncCompleted = true;
-      console.log('   ✅ Sync completo (chats.set). Iniciando sincronizador...');
-      await mediaWatcher.runSync(sock);
+    if (isLatest === true) {
+      scheduleHistorySync(sock, 'chats.set');
     }
   });
 
   sock.ev.on('messages.set', async ({ messages, isLatest }) => {
     console.log(`📜 messages.set: ${messages?.length || 0} mensagens (isLatest: ${isLatest})`);
-    if (isLatest === true && !syncCompleted) {
-      syncCompleted = true;
-      console.log('   ✅ Sync completo (messages.set). Iniciando sincronizador...');
-      await mediaWatcher.runSync(sock);
+    if (isLatest === true) {
+      scheduleHistorySync(sock, 'messages.set');
     }
   });
 
@@ -153,12 +164,7 @@ async function start() {
     if (type === 'append') {
       if (appendIdleTimer) clearTimeout(appendIdleTimer);
       appendIdleTimer = setTimeout(async () => {
-        if (!syncCompleted) {
-          syncCompleted = true;
-          console.log('');
-          console.log('   ✅ Fluxo de mensagens offline encerrado. Iniciando sincronizador...');
-          await mediaWatcher.runSync(sock);
-        }
+        scheduleHistorySync(sock, 'append-idle');
       }, APPEND_IDLE_DELAY);
     }
 
